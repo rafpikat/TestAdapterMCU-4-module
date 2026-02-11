@@ -1,0 +1,24 @@
+CompileFlags:
+  Remove:
+    - -mlongcalls
+    - -fno-shrink-wrap
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion
+    - -Wno-frame-address
+    - -fno-builtin-memcpy
+    - -fno-builtin-memset
+    - -fno-builtin-bzero
+    - -fno-builtin-stpcpy
+    - -fno-builtin-strncpy
+    - -fno-jump-tables
+  CompilationDatabase: build
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+  Suppress:
+    - unknown-argument
+    - unused-includes
+
+Index:
+  Background: Build
