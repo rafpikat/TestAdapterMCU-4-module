@@ -10,15 +10,53 @@
 #include "ad770x.h"
 #include "uartDriver.h"
 
-// #define SPI_HOST SPI2_HOST
-
 static const char *TAG = "MAIN";
-// Hàm callback
-void onValidMessageReceived(void *object) {
+
+void onValidMessageReceived(void *object, uint8_t cmd_id, uint8_t board_target,
+                            const uint8_t *data_ptr) {
   ADCMeasure *adcMeasure = static_cast<ADCMeasure *>(object);
-  adcMeasure->CalibCurrentZero();
-  // gpio_set_level(LED_CALIB_STATUS, 0);
+
+  if (cmd_id == 0x04) {
+    adcMeasure->CalibCurrentZero();
+    gpio_set_level(LED_CALIB_STATUS, 1);
+  } else if (cmd_id == 0x05) {
+    if (data_ptr == nullptr)
+      return;
+
+    // Sử dụng Union để ép kiểu an toàn và dễ kiểm soát
+    union {
+      uint32_t u32;
+      float f;
+    } valV, valI;
+
+    // Đọc 4 byte từ data_ptr vào u32 theo đúng thứ tự nhận được (Big Endian)
+    // Sau đó dùng htonl (host to network long) hoặc bswap32 để đảo về Little
+    // Endian
+    uint32_t rawV, rawI;
+    memcpy(&rawV, data_ptr, 4);
+    memcpy(&rawI, data_ptr + 4, 4);
+    // ESP_LOGI("UART_CALLBACK", "RawV hex: 0x%08X", rawV);
+    valV.u32 = __builtin_bswap32(rawV);
+    valI.u32 = __builtin_bswap32(rawI);
+
+    ESP_LOGW("CALIB", "DA NHAN: V=%.2f, I=%.2f cho board %d", valV.f, valI.f,
+             board_target);
+
+    if (board_target == 0) { // Tất cả
+      for (int i = 0; i < 4; i++) {
+        adcMeasure->calibrateDynamicScale(i, valV.f, valI.f);
+      }
+    } else { // Một board (Tool 1-4 -> ESP 0-3)
+      adcMeasure->calibrateDynamicScale(board_target - 1, valV.f, valI.f);
+    }
+
+    // Báo hiệu đèn
+    gpio_set_level(LED_CALIB_STATUS, 1);
+    vTaskDelay(pdMS_TO_TICKS(50));
+    gpio_set_level(LED_CALIB_STATUS, 0);
+  }
 }
+
 extern "C" void app_main(void) {
 
   // Khởi tạo ADCMeasure
@@ -45,35 +83,36 @@ extern "C" void app_main(void) {
     return;
   }
 
-  // ========================================
-  // TEST PHẦN CỨNG VÀ GIAO TIẾP VỚI AD7705
-  // ========================================
-  ESP_LOGI(TAG, "\n\n=== BẮT ĐẦU TEST PHẦN CỨNG VÀ GIAO TIẾP AD7705 ===\n");
+  // // ========================================
+  // // TEST PHẦN CỨNG VÀ GIAO TIẾP VỚI AD7705
+  // // ========================================
+  // // ESP_LOGI(TAG, "\n\n=== BẮT ĐẦU TEST PHẦN CỨNG VÀ GIAO TIẾP AD7705
+  // ===\n");
 
-  // Test từng board
-  for (int board = BOARD_1; board <= BOARD_4; board++) {
-    ESP_LOGI(TAG, "\n>>> Testing Board %d <<<", board + 1);
+  // // Test từng board
+  // for (int board = BOARD_1; board <= BOARD_4; board++) {
+  //   // ESP_LOGI(TAG, "\n>>> Testing Board %d <<<", board + 1);
 
-    // Test hardware trước (GPIO, SPI, CS pin, Reset pin)
-    ESP_LOGI(TAG, "--- Hardware Debug ---");
-    adcMeasure.adc.debugHardware(static_cast<AD770X::CS_t>(board));
-    vTaskDelay(300 / portTICK_PERIOD_MS);
+  //   // Test hardware trước (GPIO, SPI, CS pin, Reset pin)
+  //   // ESP_LOGI(TAG, "--- Hardware Debug ---");
+  //   adcMeasure.adc.debugHardware(static_cast<AD770X::CS_t>(board));
+  //   vTaskDelay(300 / portTICK_PERIOD_MS);
 
-    // Sau đó test communication
-    ESP_LOGI(TAG, "--- Communication Test ---");
-    bool result =
-        adcMeasure.adc.testCommunication(static_cast<AD770X::CS_t>(board));
-    if (result) {
-      ESP_LOGI(TAG, "✅ Board %d: Communication OK", board + 1);
-    } else {
-      ESP_LOGE(TAG, "❌ Board %d: Communication FAILED", board + 1);
-    }
-    vTaskDelay(500 / portTICK_PERIOD_MS);
-  }
+  //   // Sau đó test communication
+  //   // ESP_LOGI(TAG, "--- Communication Test ---");
+  //   bool result =
+  //       adcMeasure.adc.testCommunication(static_cast<AD770X::CS_t>(board));
+  //   if (result) {
+  //     // ESP_LOGI(TAG, "✅ Board %d: Communication OK", board + 1);
+  //   } else {
+  //     ESP_LOGE(TAG, "❌ Board %d: Communication FAILED", board + 1);
+  //   }
+  //   vTaskDelay(500 / portTICK_PERIOD_MS);
+  // }
 
-  ESP_LOGI(TAG, "\n=== KẾT THÚC TEST PHẦN CỨNG VÀ GIAO TIẾP ===\n\n");
-  vTaskDelay(1000 / portTICK_PERIOD_MS);
-  // ========================================
+  // // ESP_LOGI(TAG, "\n=== KẾT THÚC TEST PHẦN CỨNG VÀ GIAO TIẾP ===\n\n");
+  // vTaskDelay(1000 / portTICK_PERIOD_MS);
+  // // ========================================
 
   // Bắt đầu task quét ADC
   if (adcMeasure.startADCTask() != ESP_OK) {
@@ -91,23 +130,13 @@ extern "C" void app_main(void) {
   uart.setCallback(onValidMessageReceived, &adcMeasure);
   // Vòng lặp chính để đọc giá trị
   while (1) {
-    // vTaskDelay(200 / portTICK_PERIOD_MS);
     for (int board = BOARD_1; board <= BOARD_4; board++) {
-      // if (board == BOARD_4) {
-      //   ESP_LOGI(TAG, "Processing Board 4");
-      // }
-      // uint8_t board = BOARD_1;
       float voltage = adcMeasure.getVoltage(board);
       uart.send(voltage, 0x01, board + 1);
-      // ESP_LOGI(TAG, "Board %d Voltage: %.6f V", board, voltage);
 
       float current = adcMeasure.getCurrent(board);
       uart.send(current, 0x02, board + 1);
-      // ESP_LOGI(TAG, "Board %d Current: %.6f mA", board, current * 1000.0);
-      // if (board == BOARD_4) {
-      //   ESP_LOGI(TAG, "Board 4 - Voltage: %.6f V, Current: %.6f mA", voltage,
-      //            current * 1000.0);
-      // }
+
       vTaskDelay(100 / portTICK_PERIOD_MS);
     }
   }

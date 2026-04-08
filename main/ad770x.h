@@ -100,6 +100,8 @@ public:
   void readAndDisplaySPIPins();
   void startSPIPinMonitorTask();
 
+  void deselectAll();
+
   // Hàm test giao tiếp với AD7705
   bool testCommunication(CS_t cs);
 

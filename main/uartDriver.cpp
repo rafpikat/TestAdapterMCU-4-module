@@ -1,81 +1,3 @@
-
-// #include "esp_log.h"
-// #include "esp_err.h"
-// #include "freertos/FreeRTOS.h"
-// #include "freertos/task.h"
-// #include "uartDriver.h"
-// /**
-//  * @brief Chuyển đổi giá trị float sang 4 bytes big-endian
-//  *
-//  * @param value Giá trị float cần chuyển đổi
-//  * @param bytes Mảng 4 bytes nhận giá trị sau khi chuyển đổi
-//  */
-
-// void float_to_bytes(float value, uint8_t *bytes) {
-//     union {
-//         float f;
-//         uint32_t u;
-//     } float_union;
-//     float_union.f = value;
-
-//     // Chuyển sang big-endian
-//     bytes[0] = (float_union.u >> 24) & 0xFF;
-//     bytes[1] = (float_union.u >> 16) & 0xFF;
-//     bytes[2] = (float_union.u >> 8) & 0xFF;
-//     bytes[3] = float_union.u & 0xFF;
-// }
-
-// void SendUART(float value, uint8_t cmd_id, uint8_t id_board) {
-//     uint8_t message[10]={0};
-//     uint8_t index = 0;
-
-//     // Start Byte: 4C 4D
-//     message[index++] = START_BYTE_1;
-//     message[index++] = START_BYTE_2;
-
-//     // Cmd ID
-//     message[index++] = cmd_id;
-
-//     // Length Data: 5 bytes (1 byte ID board + 4 bytes float)
-//     message[index++] = 0x05;
-
-//     // Data: ID board
-//     message[index++] = id_board;
-
-//     // Data: Giá trị float
-//     float_to_bytes(value, &message[index]);
-//     index += 4;
-
-//     // Tính Check XOR (chỉ trên phần Data: ID board + float)
-//     uint8_t check_xor = 0;
-//     for (uint8_t i = 4; i < index; i++) { // Bắt đầu từ index 4 (phần Data)
-//         check_xor ^= message[i];
-//     }
-//     message[index++] = check_xor;
-
-//     // Gửi bản tin UART
-//     uart_write_bytes(UART_NUM_0, message, index);
-// }
-// void uartDriverInit(void)
-// {
-//     // Cấu hình UART
-//     uart_config_t uart_config = {
-//         .baud_rate = 115200,
-//         .data_bits = UART_DATA_8_BITS,
-//         .parity    = UART_PARITY_DISABLE,
-//         .stop_bits = UART_STOP_BITS_1,
-//         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
-//     };
-
-//     // Cấu hình UART0
-//     ESP_ERROR_CHECK(uart_param_config(UART_PORT_NUM, &uart_config));
-//     ESP_ERROR_CHECK(uart_set_pin(UART_PORT_NUM, UART_TX_PIN, UART_RX_PIN,
-//                                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-
-//     // Cài đặt driver cho UART0
-//     ESP_ERROR_CHECK(uart_driver_install(UART_PORT_NUM, BUF_SIZE * 2, 0, 0,
-//     NULL, 0));
-// }
 #include "uartDriver.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -170,10 +92,9 @@ void UartDriver::init() {
   uart_queue_ = xQueueCreate(20, sizeof(uart_event_t));
   ESP_ERROR_CHECK(uart_driver_install(UART_PORT_NUM, BUF_SIZE * 2, BUF_SIZE * 2,
                                       20, &uart_queue_, 0));
-  // // ESP_LOGI(TAG, "UART initialized successfully");
 
   // Tạo task để xử lý sự kiện UART
-  xTaskCreate(uartEventTask, "uart_event_task", 2048, this, 12, nullptr);
+  xTaskCreate(uartEventTask, "uart_event_task", 4096, this, 15, nullptr);
 }
 
 void UartDriver::setCallback(UARTCallback callback, void *object) {
@@ -197,12 +118,13 @@ void UartDriver::uartEventTask(void *pvParameters) {
               uart_read_bytes(UART_PORT_NUM, &byte, 1, 20 / portTICK_PERIOD_MS);
           if (len <= 0)
             break;
-
+          printf("[%02X]", byte);
           // Tìm start bytes
           if (!start_found) {
             if (byte == START_BYTE_1) {
               buffer[index++] = byte;
               start_found = true;
+              ESP_LOGD(TAG, "Found Start 1");
             }
             continue;
           }
@@ -228,29 +150,42 @@ void UartDriver::uartEventTask(void *pvParameters) {
             }
           }
 
-          // Kiểm tra khi nhận đủ bản tin (2 start bytes + 1 CmdID + 1 Length +
-          // data_length + 1 Checksum)
           if (index == 4 + buffer[3] + 1) {
-            // Kiểm tra Checksum
+            // ESP_LOGI(TAG, "Nhan duoc ban tin dai %d byte", (int)index);
             uint8_t received_checksum = buffer[index - 1];
             uint8_t calculated_checksum =
                 driver->calculateChecksum(buffer.data(), 4, 4 + buffer[3]);
-            if (received_checksum != calculated_checksum) {
-              ESP_LOGE(TAG,
-                       "Checksum mismatch: received 0x%02X, calculated 0x%02X",
-                       received_checksum, calculated_checksum);
-              index = 0;
-              start_found = false;
-              continue;
-            }
 
-            // Kiểm tra CmdID và Data
-            if (buffer[2] == 0x03 && buffer[3] == 0x01 && buffer[4] == 0x00) {
-              if (driver->callback_) {
-                driver->callback_(driver->callback_object_);
+            if (received_checksum == calculated_checksum) {
+              uint8_t cmd_id = buffer[2];
+
+              // Lấy board_id từ phần Data (vị trí buffer[4])
+              // Lưu ý: buffer[3] là độ dài dữ liệu (Length), byte ID nằm ở
+              // buffer[4]
+              uint8_t board_id = buffer[4];
+              ESP_LOGW(TAG, "=> UART VALID: CMD=0x%02X, Board=%d, Len=%d",
+                       cmd_id, board_id, buffer[3]);
+              // Kiểm tra nếu là các lệnh Calib (0x03, 0x04, 0x05)
+              if (cmd_id == CMD_CALIB_CURRENT || cmd_id == CMD_CALIB_VOLT_0V ||
+                  cmd_id == CMD_CALIB_VOLT_24V) {
+                if (driver->callback_) {
+                  // // TRUYỀN THÊM board_id vào callback để hàm main xử lý đơn
+                  // lẻ driver->callback_(driver->callback_object_, cmd_id,
+                  // board_id);
+
+                  // Truyền thêm &buffer[5] - đây là vị trí bắt đầu của 4 byte
+                  // Volt trong bản tin của bạn
+                  // (Bản tin: 4C 4M CMD LEN ID [V V V V] [I I I I] XOR)
+                  // Index:    0  1  2   3   4   5 6 7 8    9 10 11 12 13
+                  driver->callback_(driver->callback_object_, cmd_id, board_id,
+                                    &buffer[5]);
+                }
               }
+            } else {
+              ESP_LOGE(TAG,
+                       "=> UART CHECKSUM MISMATCH! RX: 0x%02X, CALC: 0x%02X",
+                       received_checksum, calculated_checksum);
             }
-
             index = 0;
             start_found = false;
           }

@@ -31,11 +31,15 @@ public:
   static constexpr uint8_t START_BYTE_1 = 0x4C;
   static constexpr uint8_t START_BYTE_2 = 0x4D;
 
-  // Callback type for handling received messages
-  typedef void (*UARTCallback)(void *object);
+  typedef void (*UARTCallback)(void *object, uint8_t cmd_id, uint8_t board_id,
+                               const uint8_t *data_ptr);
 
   UartDriver();
   ~UartDriver();
+
+  static constexpr uint8_t CMD_CALIB_CURRENT = 0x03;
+  static constexpr uint8_t CMD_CALIB_VOLT_0V = 0x04;
+  static constexpr uint8_t CMD_CALIB_VOLT_24V = 0x05;
 
   // Khởi tạo UART driver
   void init();

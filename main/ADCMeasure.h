@@ -7,6 +7,8 @@
 #include "freertos/task.h"
 #include "kalman.h"
 #include "nvs_flash.h"
+#include <cmath>
+#include <cstring>
 
 // Định nghĩa board và chân GPIOs
 #define BOARD_1 0x00
@@ -15,24 +17,15 @@
 #define BOARD_4 0x03
 
 #define CS_PIN_1 GPIO_NUM_5
-#define CS_PIN_2 GPIO_NUM_16
-#define CS_PIN_3 GPIO_NUM_14
+#define CS_PIN_2 GPIO_NUM_14
+#define CS_PIN_3 GPIO_NUM_16
 #define CS_PIN_4 GPIO_NUM_32
 
-// #define CS_PIN_1 GPIO_NUM_14
-// #define CS_PIN_3 GPIO_NUM_5
-
 #define RESET_PIN_1 GPIO_NUM_4
-#define RESET_PIN_2 GPIO_NUM_15
-#define RESET_PIN_3 GPIO_NUM_22
+#define RESET_PIN_2 GPIO_NUM_22
+#define RESET_PIN_3 GPIO_NUM_15
 #define RESET_PIN_4 GPIO_NUM_27
 
-// #define RESET_PIN_1 GPIO_NUM_22
-// #define RESET_PIN_3 GPIO_NUM_4
-
-// DRDY1 GPIO_NUM_17
-// DRDY2 GPIO_NUM_25
-// DRDY3 GPIO_NUM_21
 #define R_TOTAL1 (99.1 + 42.7 + 2.35) // kOhm
 #define R_TOTAL2 (98.6 + 42.9 + 2.35) // kOhm
 #define R_TOTAL3 (99.4 + 42.6 + 2.35) // kOhm
@@ -108,18 +101,25 @@ public:
 
   // Lưu currentOffset vào flash
   esp_err_t saveCurrentOffsetToFlash();
-
+  esp_err_t saveVoltageCalibToFlash();
+  void captureVoltageRaw24_Single(uint8_t board_idx);
+  void captureVoltageRaw24_All();
   // Đọc currentOffset từ flash
   esp_err_t loadCurrentOffsetFromFlash();
+  void calibrateDynamicScale(uint8_t board_id, float actualV, float actualI);
+  esp_err_t loadCurrentConfigFromFlash(); // Đọc lại toàn bộ thông số
+  void captureVoltageRaw0();              // Tool gửi lệnh Calib 0V
+  void captureVoltageRaw24();             // Tool gửi lệnh Calib 24V
+  esp_err_t loadVoltageCalibFromFlash();  // Cần hàm load khi khởi động
 
-  void CalibCurrentZero(void) { isBoardCalibDone = false; }
+  void CalibCurrentZero(void);
 
 private:
   // Bộ lọc Kalman cho điện áp và dòng điện
   KalmanFilter voltageFilter;
   KalmanFilter currentFilter;
 
-  bool isBoardCalibDone = true;
+  bool isBoardCalibDone = false;
   // bool isBoardCalibDone = false;
   // Ma trận và vector cho bộ lọc Kalman
   float A[4];  // Ma trận chuyển trạng thái (2x2)
@@ -146,14 +146,26 @@ private:
   double voltage[4] = {0.0, 0.0, 0.0, 0.0}; // Lưu giá trị điện áp đã lọc
   // Task handle cho FreeRTOS
   // TaskHandle_t adcTaskHandle;
+  uint16_t voltageRaw0[4]; // Giá trị raw tại 0V cho 4 board
+  uint16_t
+      voltageRawScale[4]; // Lưu ADC thô tại điểm Scale (thay cho voltageRaw24)
+  float voltageValueScale[4]; // Lưu giá trị thực tế (V) lúc Calib
+                              // (VD: 21.0, 15.0)
+  uint16_t currentRaw0[4];    // ADC thô tại 0A cho 4 board
+  float currentVal0[4];       // Mốc 1: Dòng thực tế (Thường = 0.0f)
 
+  uint16_t currentRawScale[4]; // ADC thô tại điểm chuẩn (VD: 3A)
+  float currentValueScale[4]; // Giá trị dòng điện chuẩn thực tế (A)
+
+  double currentSlope[4];         // Lưu hệ số dòng điện (A/ADC)
+  bool isCalibratingZero = false; // THÊM: Flag phân biệt loại calib
   // Hàm task quét ADC
   static void adcScanTask(void *arg);
-
+  void calculateCurrentSlope(uint8_t board_id);
   // Hàm chuyển đổi giá trị thô thành điện áp/dòng điện
   double convertToVoltage(uint8_t board_id, uint16_t raw);
   double convertToCurrent(uint8_t board_id, uint16_t raw);
-
+  void printFlashData();
   // Cấu hình bộ lọc Kalman
   void setupKalmanFilter();
 };

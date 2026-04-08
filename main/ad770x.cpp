@@ -99,41 +99,6 @@ AD770X::AD770X(double vref, spi_host_device_t spi_host, gpio_num_t cs_pin_1,
   gpio_set_level(cs_pin_2, 1); // CS 2 high (inactive)
   gpio_set_level(cs_pin_3, 1); // CS 3 high (inactive)
   gpio_set_level(cs_pin_4, 1); // CS 4 high (inactive)
-  // vTaskDelay(50 / portTICK_PERIOD_MS); // Tăng delay lên 50ms
-
-  // // THÊM: Verify GPIO level và báo lỗi nếu không set được
-  // ESP_LOGI("GPIO_INIT", "=== GPIO CS Pins Initialization ===");
-  // ESP_LOGI("GPIO_INIT", "CS1 (GPIO %d): level=%d (expected=1)", cs_pin_1,
-  //          gpio_get_level(cs_pin_1));
-  // ESP_LOGI("GPIO_INIT", "CS2 (GPIO %d): level=%d (expected=1)", cs_pin_2,
-  //          gpio_get_level(cs_pin_2));
-  // ESP_LOGI("GPIO_INIT", "CS3 (GPIO %d): level=%d (expected=1)", cs_pin_3,
-  //          gpio_get_level(cs_pin_3));
-  // ESP_LOGI("GPIO_INIT", "CS4 (GPIO %d): level=%d (expected=1)", cs_pin_4,
-  //          gpio_get_level(cs_pin_4));
-
-  // // THÊM: Kiểm tra nếu GPIO không set được HIGH, báo lỗi nghiêm trọng
-  // if (gpio_get_level(cs_pin_1) == 0 || gpio_get_level(cs_pin_2) == 0 ||
-  //     gpio_get_level(cs_pin_3) == 0 || gpio_get_level(cs_pin_4) == 0) {
-  //   ESP_LOGE(
-  //       "GPIO_INIT",
-  //       "CRITICAL: Some CS pins are LOW! Hardware issue or GPIO conflict!");
-  //   ESP_LOGE("GPIO_INIT", "CS1=%d, CS2=%d, CS3=%d, CS4=%d",
-  //            gpio_get_level(cs_pin_1), gpio_get_level(cs_pin_2),
-  //            gpio_get_level(cs_pin_3), gpio_get_level(cs_pin_4));
-  // }
-  // ESP_LOGI("GPIO_INIT", "==================================\n");
-
-  // if (gpio_get_level(cs_pin_1) == 0 || gpio_get_level(cs_pin_2) == 0 ||
-  //     gpio_get_level(cs_pin_3) == 0 || gpio_get_level(cs_pin_4) == 0) {
-  //   ESP_LOGW("GPIO_INIT",
-  //            "WARNING: Some CS pins read as LOW (may be false reading)");
-  //   ESP_LOGW("GPIO_INIT", "CS1=%d, CS2=%d, CS3=%d, CS4=%d",
-  //            gpio_get_level(cs_pin_1), gpio_get_level(cs_pin_2),
-  //            gpio_get_level(cs_pin_3), gpio_get_level(cs_pin_4));
-  //   ESP_LOGW("GPIO_INIT",
-  //            "Continuing anyway - will verify during SPI operations");
-  // }
 
   gpio_set_level(reset_pin_1, 1);      // CS high (inactive)
   gpio_set_level(reset_pin_2, 1);      // CS high (inactive)
@@ -166,24 +131,6 @@ AD770X::AD770X(double vref, spi_host_device_t spi_host, gpio_num_t cs_pin_1,
   devcfg.spics_io_num = -1;             // CS handled manually
   devcfg.queue_size = 1;
 
-  // THÊM ĐOẠN CODE NÀY VÀO ĐÂY (sau dòng 114, trước dòng 115):
-  // Log SPI configuration để kiểm tra
-  // ESP_LOGI("SPI_CONFIG", "=== SPI Device Configuration ===");
-  // ESP_LOGI("SPI_CONFIG", "SPI Mode: %d (CPOL=1, CPHA=0 for Mode 2)",
-  //          devcfg.mode);
-  // ESP_LOGI("SPI_CONFIG", "Clock Speed: %d Hz (%.2f kHz)",
-  // devcfg.clock_speed_hz,
-  //          devcfg.clock_speed_hz / 1000.0);
-  // ESP_LOGI("SPI_CONFIG", "CS Control: Manual (GPIO)");
-  // ESP_LOGI("SPI_CONFIG", "MOSI Pin: GPIO %d", DEFAULT_MOSI_PIN);
-  // ESP_LOGI("SPI_CONFIG", "MISO Pin: GPIO %d", DEFAULT_MISO_PIN);
-  // ESP_LOGI("SPI_CONFIG", "SCK Pin: GPIO %d", DEFAULT_SCK_PIN);
-  // ESP_LOGI(
-  //     "SPI_CONFIG",
-  //     "CS Pins: GPIO %d (CS1), GPIO %d (CS2), GPIO %d (CS3), GPIO %d (CS4)",
-  //     cs_pin_1, cs_pin_2, cs_pin_3, cs_pin_4);
-  // ESP_LOGI("SPI_CONFIG", "================================\n");
-
   ESP_ERROR_CHECK(spi_bus_add_device(spi_host, &devcfg, &spi_device));
 }
 
@@ -207,12 +154,6 @@ void AD770X::readAndDisplaySPIPins() {
   int mosi_level = gpio_get_level(DEFAULT_MOSI_PIN);
   int miso_level = gpio_get_level(DEFAULT_MISO_PIN);
   int sck_level = gpio_get_level(DEFAULT_SCK_PIN);
-
-  // ESP_LOGI("SPI_TEST", "=== SPI PINS STATUS ===");
-  // ESP_LOGI("SPI_TEST", "MOSI (GPIO %d): %d", DEFAULT_MOSI_PIN, mosi_level);
-  // ESP_LOGI("SPI_TEST", "MISO (GPIO %d): %d", DEFAULT_MISO_PIN, miso_level);
-  // ESP_LOGI("SPI_TEST", "SCK  (GPIO %d): %d", DEFAULT_SCK_PIN, sck_level);
-  // ESP_LOGI("SPI_TEST", "======================");
 }
 
 static void spiPinMonitorTask(void *arg) {
@@ -229,25 +170,6 @@ void AD770X::startSPIPinMonitorTask() {
   xTaskCreate(spiPinMonitorTask, "spi_pin_monitor", 2048, this, 5, NULL);
 }
 
-// uint8_t AD770X::spiTransfer(uint8_t data) {
-//   uint8_t ret = 0;
-//   spi_transaction_t t = {};
-//   t.length = 8; // 8 bits
-//   t.rxlength = 8;
-//   t.tx_buffer = &data;
-//   t.rx_buffer = &ret;
-
-//   // THÊM LOG: Hiển thị dữ liệu SPI đang truyền/nhận
-//   ESP_LOGI("SPI_TRANSFER", "TX: 0x%02X (0b%08b)", data, data);
-//   ESP_ERROR_CHECK(spi_device_polling_transmit(spi_device, &t));
-//   if (ret == 0x00) {
-//     ESP_LOGW("SPI_TRANSFER",
-//              "WARNING: RX is 0x00 - MISO may not be receiving data!");
-//   }
-
-//   ESP_LOGI("SPI_TRANSFER", "RX: 0x%02X (0b%08b)", ret, ret);
-//   return ret;
-// }
 uint8_t AD770X::spiTransfer(uint8_t data) {
   uint8_t ret = 0;
   spi_transaction_t t = {};
@@ -272,44 +194,8 @@ uint8_t AD770X::spiTransfer(uint8_t data) {
   ESP_LOGI("SPI_TRANSFER", "TX: 0x%02X (0b%s) -> RX: 0x%02X (0b%s)", data,
            tx_binary, ret, rx_binary);
 
-  // CHỈ log khi RX = 0x00 và không phải là giá trị hợp lệ (0x00 có thể là giá
-  // trị thực) Bỏ qua warning này vì 0x00 có thể là giá trị hợp lệ từ ADC
-
   return ret;
 }
-// void AD770X::setNextOperation(uint8_t reg, uint8_t channel, uint8_t
-// readWrite,
-//                               CS_t cs) {
-//   // gpio_num_t cs_pin = (cs == CS_1)   ? this->cs_pin_1
-//   //                     : (cs == CS_2) ? this->cs_pin_2
-//   //                     : (cs == CS_3) ? this->cs_pin_3
-//   //                                    : this->cs_pin_4;
-//   uint8_t r = (reg << 4) | (readWrite << 3) | channel;
-
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(5 / portTICK_PERIOD_MS);
-
-//   // Sau đó mới set CS cần thiết xuống LOW
-//   gpio_set_level(cs_pin_1, cs == CS_1 ? 0 : 1);
-//   gpio_set_level(cs_pin_2, cs == CS_2 ? 0 : 1);
-//   gpio_set_level(cs_pin_3, cs == CS_3 ? 0 : 1);
-//   gpio_set_level(cs_pin_4, cs == CS_4 ? 0 : 1);
-//   vTaskDelay(5 / portTICK_PERIOD_MS);
-
-//   spiTransfer(r);
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(1 / portTICK_PERIOD_MS);
-// }
 
 void AD770X::setNextOperation(uint8_t reg, uint8_t channel, uint8_t readWrite,
                               CS_t cs) {
@@ -341,7 +227,6 @@ void AD770X::setNextOperation(uint8_t reg, uint8_t channel, uint8_t readWrite,
            readWrite, cs);
   char cmd_binary[9];
   byteToBinary(r, cmd_binary);
-  ESP_LOGI("setNextOperation", "Command byte: 0x%02X (0b%s)", r, cmd_binary);
 
   // Đảm bảo tất cả CS pin về HIGH trước khi set CS cần thiết xuống LOW
   gpio_set_level(cs_pin_1, 1);
@@ -370,38 +255,6 @@ void AD770X::setNextOperation(uint8_t reg, uint8_t channel, uint8_t readWrite,
   vTaskDelay(
       2 / portTICK_PERIOD_MS); // Tăng delay để đảm bảo CS HIGH được nhận diện
 }
-
-// void AD770X::writeClockRegister(uint8_t CLKDIS, uint8_t CLKDIV,
-//                                 uint8_t outputUpdateRate, CS_t cs) {
-//   // gpio_num_t cs_pin = (cs == CS_1)   ? this->cs_pin_1
-//   //                     : (cs == CS_2) ? this->cs_pin_2
-//   //                     : (cs == CS_3) ? this->cs_pin_3
-//   //                                    : this->cs_pin_4;
-//   uint8_t r = (CLKDIS << 4) | (CLKDIV << 3) | outputUpdateRate;
-//   r &= ~(1 << 2); // Clear CLK bit
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(5 / portTICK_PERIOD_MS);
-
-//   // Sau đó mới set CS cần thiết xuống LOW
-//   gpio_set_level(cs_pin_1, cs == CS_1 ? 0 : 1);
-//   gpio_set_level(cs_pin_2, cs == CS_2 ? 0 : 1);
-//   gpio_set_level(cs_pin_3, cs == CS_3 ? 0 : 1);
-//   gpio_set_level(cs_pin_4, cs == CS_4 ? 0 : 1);
-//   vTaskDelay(5 / portTICK_PERIOD_MS);
-//   spiTransfer(r);
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(1 / portTICK_PERIOD_MS);
-// }
 
 void AD770X::writeClockRegister(uint8_t CLKDIS, uint8_t CLKDIV,
                                 uint8_t outputUpdateRate, CS_t cs) {
@@ -453,40 +306,6 @@ void AD770X::writeClockRegister(uint8_t CLKDIS, uint8_t CLKDIV,
   vTaskDelay(
       2 / portTICK_PERIOD_MS); // Tăng delay để đảm bảo CS HIGH được nhận diện
 }
-
-// void AD770X::writeSetupRegister(uint8_t operationMode, uint8_t gain,
-//                                 uint8_t unipolar, uint8_t buffered,
-//                                 uint8_t fsync, CS_t cs) {
-//   // gpio_num_t cs_pin = (cs == CS_1)   ? this->cs_pin_1
-//   //                     : (cs == CS_2) ? this->cs_pin_2
-//   //                     : (cs == CS_3) ? this->cs_pin_3
-//   //                                    : this->cs_pin_4;
-//   uint8_t r = (operationMode << 6) | (gain << 3) | (unipolar << 2) |
-//               (buffered << 1) | fsync;
-
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(5 / portTICK_PERIOD_MS);
-
-//   // Sau đó mới set CS cần thiết xuống LOW
-//   gpio_set_level(cs_pin_1, cs == CS_1 ? 0 : 1);
-//   gpio_set_level(cs_pin_2, cs == CS_2 ? 0 : 1);
-//   gpio_set_level(cs_pin_3, cs == CS_3 ? 0 : 1);
-//   gpio_set_level(cs_pin_4, cs == CS_4 ? 0 : 1);
-//   vTaskDelay(5 / portTICK_PERIOD_MS);
-//   spiTransfer(r);
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(1 / portTICK_PERIOD_MS);
-// }
 
 void AD770X::writeSetupRegister(uint8_t operationMode, uint8_t gain,
                                 uint8_t unipolar, uint8_t buffered,
@@ -552,159 +371,6 @@ void AD770X::writeSetupRegister(uint8_t operationMode, uint8_t gain,
   vTaskDelay(
       2 / portTICK_PERIOD_MS); // Tăng delay để đảm bảo CS HIGH được nhận diện
 }
-
-// uint16_t AD770X::readADResult(CS_t cs) {
-//   gpio_num_t cs_pin = (cs == CS_1)   ? this->cs_pin_1
-//                       : (cs == CS_2) ? this->cs_pin_2
-//                       : (cs == CS_3) ? this->cs_pin_3
-//                                      : this->cs_pin_4;
-//   uint8_t b1, b2;
-//   ESP_LOGI("SPI_DEBUG", "=== Reading AD Result for CS %d ===", cs);
-//   ESP_LOGI("SPI_DEBUG", "CS pin GPIO: %d", cs_pin);
-//   ESP_LOGI("SPI_DEBUG",
-//            "CS pin level BEFORE set: CS1=%d, CS2=%d, CS3=%d, CS4=%d",
-//            gpio_get_level(cs_pin_1), gpio_get_level(cs_pin_2),
-//            gpio_get_level(cs_pin_3), gpio_get_level(cs_pin_4));
-//   // SỬA: Đảm bảo tất cả CS đều HIGH trước, sau đó mới set CS cần thiết xuống
-//   // LOW
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(5 / portTICK_PERIOD_MS); // Tăng delay lên 5ms
-
-//   // THÊM: Verify tất cả CS đều HIGH trước khi tiếp tục
-//   if (gpio_get_level(cs_pin_1) != 1 || gpio_get_level(cs_pin_2) != 1 ||
-//       gpio_get_level(cs_pin_3) != 1 || gpio_get_level(cs_pin_4) != 1) {
-//     ESP_LOGE("SPI_DEBUG", "CRITICAL: Cannot set all CS pins HIGH!");
-//     ESP_LOGE("SPI_DEBUG", "CS1=%d, CS2=%d, CS3=%d, CS4=%d",
-//              gpio_get_level(cs_pin_1), gpio_get_level(cs_pin_2),
-//              gpio_get_level(cs_pin_3), gpio_get_level(cs_pin_4));
-//     // Thử reset GPIO và set lại
-//     gpio_reset_pin(cs_pin_1);
-//     gpio_reset_pin(cs_pin_2);
-//     gpio_reset_pin(cs_pin_3);
-//     gpio_reset_pin(cs_pin_4);
-//     vTaskDelay(10 / portTICK_PERIOD_MS);
-//     // Reconfigure as output
-//     gpio_config_t io_conf = {.pin_bit_mask =
-//                                  (1ULL << cs_pin_1) | (1ULL << cs_pin_2) |
-//                                  (1ULL << cs_pin_3) | (1ULL << cs_pin_4),
-//                              .mode = GPIO_MODE_OUTPUT,
-//                              .pull_up_en = GPIO_PULLUP_ENABLE,
-//                              .pull_down_en = GPIO_PULLDOWN_DISABLE,
-//                              .intr_type = GPIO_INTR_DISABLE};
-//     gpio_config(&io_conf);
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//     vTaskDelay(10 / portTICK_PERIOD_MS);
-//   }
-
-//   // Sau đó mới set CS cần thiết xuống LOW
-//   gpio_set_level(cs_pin_1, cs == CS_1 ? 0 : 1);
-//   gpio_set_level(cs_pin_2, cs == CS_2 ? 0 : 1);
-//   gpio_set_level(cs_pin_3, cs == CS_3 ? 0 : 1);
-//   gpio_set_level(cs_pin_4, cs == CS_4 ? 0 : 1);
-//   vTaskDelay(5 / portTICK_PERIOD_MS); // Đợi GPIO ổn định
-//   // THÊM LOG: Kiểm tra CS pin status SAU KHI set
-//   ESP_LOGI("SPI_DEBUG",
-//            "CS pin level AFTER set: CS1=%d, CS2=%d, CS3=%d, CS4=%d",
-//            gpio_get_level(cs_pin_1), gpio_get_level(cs_pin_2),
-//            gpio_get_level(cs_pin_3), gpio_get_level(cs_pin_4));
-//   ESP_LOGI("SPI_DEBUG", "Active CS pin (GPIO %d) level: %d", cs_pin,
-//            gpio_get_level(cs_pin));
-
-//   // THÊM: Kiểm tra nếu CS pin không đúng, báo lỗi
-//   if (gpio_get_level(cs_pin) != 0) {
-//     ESP_LOGE("SPI_DEBUG", "ERROR: Active CS pin should be LOW but is HIGH!");
-//   }
-//   if (cs != CS_1 && gpio_get_level(cs_pin_1) != 1) {
-//     ESP_LOGE("SPI_DEBUG", "ERROR: CS1 should be HIGH but is LOW!");
-//   }
-//   if (cs != CS_2 && gpio_get_level(cs_pin_2) != 1) {
-//     ESP_LOGE("SPI_DEBUG", "ERROR: CS2 should be HIGH but is LOW!");
-//   }
-//   if (cs != CS_3 && gpio_get_level(cs_pin_3) != 1) {
-//     ESP_LOGE("SPI_DEBUG", "ERROR: CS3 should be HIGH but is LOW!");
-//   }
-//   if (cs != CS_4 && gpio_get_level(cs_pin_4) != 1) {
-//     ESP_LOGE("SPI_DEBUG", "ERROR: CS4 should be HIGH but is LOW!");
-//   }
-
-//   ESP_LOGI("SPI_DEBUG", "Reading first byte (0x00)...");
-//   b1 = spiTransfer(0x0);
-//   ESP_LOGI("SPI_DEBUG", "First byte received: 0x%02X", b1);
-//   // THÊM LOG: Trước khi đọc byte thứ hai
-//   ESP_LOGI("SPI_DEBUG", "Reading second byte (0x00)...");
-//   b2 = spiTransfer(0x0);
-//   ESP_LOGI("SPI_DEBUG", "Second byte received: 0x%02X", b2);
-
-//   // THÊM LOG: Kết quả cuối cùng
-//   uint16_t result = (b1 << 8) | b2;
-//   ESP_LOGI("SPI_DEBUG", "Combined result: 0x%04X (%d)", result, result);
-
-//   // SỬA: Force set tất cả CS về HIGH sau khi đọc xong
-//   for (int i = 0; i < 3; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(5 / portTICK_PERIOD_MS); // Tăng delay
-//   // THÊM LOG: Sau khi set CS high
-//   ESP_LOGI("SPI_DEBUG",
-//            "CS pin level AFTER read (all high): CS1=%d, CS2=%d, CS3=%d,
-//            CS4=%d", gpio_get_level(cs_pin_1), gpio_get_level(cs_pin_2),
-//            gpio_get_level(cs_pin_3), gpio_get_level(cs_pin_4));
-//   ESP_LOGI("SPI_DEBUG", "=== End reading AD Result ===\n");
-//   vTaskDelay(1 / portTICK_PERIOD_MS);
-//   return result;
-// }
-
-// uint16_t AD770X::readADResult(CS_t cs) {
-//   gpio_num_t cs_pin = (cs == CS_1)   ? this->cs_pin_1
-//                       : (cs == CS_2) ? this->cs_pin_2
-//                       : (cs == CS_3) ? this->cs_pin_3
-//                                      : this->cs_pin_4;
-//   uint8_t b1, b2;
-
-//   // Force set tất cả CS HIGH trước
-//   for (int i = 0; i < 5; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(10 / portTICK_PERIOD_MS);
-
-//   // Sau đó mới set CS cần thiết xuống LOW
-//   gpio_set_level(cs_pin_1, cs == CS_1 ? 0 : 1);
-//   gpio_set_level(cs_pin_2, cs == CS_2 ? 0 : 1);
-//   gpio_set_level(cs_pin_3, cs == CS_3 ? 0 : 1);
-//   gpio_set_level(cs_pin_4, cs == CS_4 ? 0 : 1);
-//   vTaskDelay(10 / portTICK_PERIOD_MS);
-
-//   // Đọc 2 bytes từ ADC
-//   b1 = spiTransfer(0x0);
-//   b2 = spiTransfer(0x0);
-
-//   uint16_t result = (b1 << 8) | b2;
-
-//   // Force set tất cả CS về HIGH sau khi đọc xong
-//   for (int i = 0; i < 5; i++) {
-//     gpio_set_level(cs_pin_1, 1);
-//     gpio_set_level(cs_pin_2, 1);
-//     gpio_set_level(cs_pin_3, 1);
-//     gpio_set_level(cs_pin_4, 1);
-//   }
-//   vTaskDelay(5 / portTICK_PERIOD_MS);
-
-//   return result;
-// }
 
 // Đọc kết quả ADC 16 - bit.
 // Quản lý CS : set tất cả HIGH, chỉ CS được chọn LOW, đọc 2 bytes(MSB, LSB),
@@ -810,10 +476,6 @@ bool AD770X::dataReady(uint8_t channel, CS_t cs) {
 }
 
 void AD770X::reset(CS_t cs) {
-  // gpio_num_t cs_pin = (cs == CS_1)   ? this->cs_pin_1
-  //                     : (cs == CS_2) ? this->cs_pin_2
-  //                     : (cs == CS_3) ? this->cs_pin_3
-  //                                    : this->cs_pin_4;
 
   gpio_set_level(cs_pin_1, cs == CS_1 ? 0 : 1);
 
@@ -908,6 +570,13 @@ void AD770X::init(uint8_t channel, uint8_t clkDivider, uint8_t polarity,
     gpio_set_level(cs_pin_4, 1);
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
+}
+
+void AD770X::deselectAll() {
+  gpio_set_level(cs_pin_1, 1);
+  gpio_set_level(cs_pin_2, 1);
+  gpio_set_level(cs_pin_3, 1);
+  gpio_set_level(cs_pin_4, 1);
 }
 
 /**
